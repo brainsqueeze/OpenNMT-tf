@@ -5,7 +5,10 @@ setup(
     version="0.1",
     license="MIT",
     install_requires=[
-        "pyyaml"
+        "pyyaml",
+        "flask",
+        "nltk",
+        "numpy"
     ],
     extras_require={
         "TensorFlow": ["tensorflow==1.4.0"],

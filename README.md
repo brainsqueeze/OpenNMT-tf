@@ -10,6 +10,12 @@ OpenNMT-tf is a general purpose sequence modeling tool in TensorFlow with produc
 
 *The project is still in beta and does not come with stability guarantees.*
 
+## Hindi-to-English learning
+
+This fork of the main OpenNMT-tf project contains training documents and
+supporting scripts for training and serving up a Hindi to English model. 
+See the data [README](hindi-en-data/README.md) for details. 
+
 ## Key features
 
 OpenNMT-tf focuses on modularity to support advanced modeling and training capabilities:
