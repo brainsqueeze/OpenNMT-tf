@@ -1,0 +1,9 @@
+model_dir: hi-en
+
+data:
+  train_features_file: data/hi-en/src-train.txt
+  train_labels_file: data/hi-en/tgt-train.txt
+  eval_features_file: data/hi-en/src-val.txt
+  eval_labels_file: data/hi-en/tgt-val.txt
+  source_words_vocabulary: data/hi-en/src-vocab.txt
+  target_words_vocabulary: data/hi-en/tgt-vocab.txt
