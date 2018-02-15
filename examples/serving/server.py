@@ -4,7 +4,6 @@ from __future__ import print_function
 
 import argparse
 import json
-import os
 
 import tensorflow as tf
 
@@ -15,6 +14,10 @@ from tensorflow_serving.apis import prediction_service_pb2
 
 from flask import Flask, request, Response
 from flask_cors import cross_origin
+from tornado.wsgi import WSGIContainer
+from tornado.ioloop import IOLoop
+from tornado.httpserver import HTTPServer
+from tornado.options import parse_command_line
 
 from nltk.tokenize import word_tokenize, sent_tokenize
 
@@ -94,7 +97,7 @@ def translate_api():
         j = request.form
 
     if 'text' not in j:
-        return Response(response=json.dumps({"errorMessage": "No 'text' parameter"}, indent=4),
+        return Response(response=json.dumps({"errorMessage": "No 'text' parameter"}, indent=2),
                         status=500,
                         mimetype="application/json")
 
@@ -108,24 +111,35 @@ def translate_api():
         future = parse_translation_result(future.result())
         futures.append(future)
 
-    # future = translate(st, name, tokens, timeout=to)
-    # translation = parse_translation_result(future.result())
-    # translation = " ".join(translation)
-
     translation = " ".join([" ".join(future) for future in futures])
-
     results = {
         "originalText": text,
         "translatedText": translation
     }
 
-    return Response(response=json.dumps(results, indent=4),
+    return Response(response=json.dumps(results, indent=2),
                     status=200,
                     mimetype="application/json")
 
 
+def run_server():
+    """
+    This initializes the Tornado WSGI server to allow for
+    asynchronous request handling
+    """
+
+    http_server = HTTPServer(WSGIContainer(app))
+    http_server.listen(6006)
+
+    parse_command_line()
+
+    io_loop = IOLoop.instance()
+
+    try:
+        io_loop.start()
+    except KeyboardInterrupt:
+        pass
+
+
 if __name__ == "__main__":
-    debug = os.environ.get('DEBUG', False)
-    port = os.environ.get('PORT', 6006)
-    testing = os.environ.get('TESTING', False)
-    app.run(host='0.0.0.0', port=port, threaded=False, debug=debug)
+    run_server()

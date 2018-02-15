@@ -8,7 +8,8 @@ setup(
         "pyyaml",
         "flask",
         "nltk",
-        "numpy"
+        "numpy",
+        "tornado"
     ],
     extras_require={
         "TensorFlow": ["tensorflow==1.4.0"],
