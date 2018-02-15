@@ -88,7 +88,7 @@ name, to, st = main()
 
 
 @app.route('/translate', methods=['POST', 'GET'])
-@cross_origin(origin='*', headers=['Content-Type', 'Authorization'])
+@cross_origin(origins=['*'], allow_headers=['Content-Type', 'Authorization'])
 def translate_api():
     j = request.get_json()
     if j is None:
