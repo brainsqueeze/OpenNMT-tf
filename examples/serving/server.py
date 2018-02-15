@@ -17,7 +17,7 @@ from flask_cors import cross_origin
 from tornado.wsgi import WSGIContainer
 from tornado.ioloop import IOLoop
 from tornado.httpserver import HTTPServer
-from tornado.options import parse_command_line
+# from tornado.options import parse_command_line
 
 from nltk.tokenize import word_tokenize, sent_tokenize
 
@@ -131,7 +131,7 @@ def run_server():
     http_server = HTTPServer(WSGIContainer(app))
     http_server.listen(6006)
 
-    parse_command_line()
+    # parse_command_line()
 
     io_loop = IOLoop.instance()
 
