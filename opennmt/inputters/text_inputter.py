@@ -366,6 +366,7 @@ class WordEmbedder(TextInputter):
           "w_embs",
           shape=shape,
           initializer=initializer,
+          dtype=tf.float32,
           trainable=self.trainable)
 
     outputs = tf.nn.embedding_lookup(embeddings, inputs)
