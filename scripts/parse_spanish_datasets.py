@@ -31,7 +31,11 @@ def clean_data(root_path):
             english_line = re.sub(pattern, r" \1 ", english_line.strip())
             english_line = re.sub(r"\s{2,}", " ", english_line)
 
-            if len(word_tokenize(english_line)) <= MAX_SEQ_LEN:
+            # if 0 < len(word_tokenize(english_line)) <= MAX_SEQ_LEN:
+            #     english_text.append(english_line)
+            #     spanish_text.append(spanish_line)
+
+            if len(english_line) > 0 and len(spanish_line) > 0:
                 english_text.append(english_line)
                 spanish_text.append(spanish_line)
         english_file.close()
@@ -86,14 +90,11 @@ if __name__ == '__main__':
     path = os.path.dirname(os.path.abspath(__file__)) + "/../es-en-data/"
     es_corpus, en_corpus = [], []
 
-    es, en = clean_data(root_path=path + "raw/")
+    # clean data
+    es, en = clean_data(root_path=path)
 
-    train_sets, val_sets, test_sets = split_sets(spanish_set=es,
-                                                 english_set=en,
-                                                 val_percent=0.05,
-                                                 test_percent=0.05)
+    # split sets out randomly
+    train_sets, val_sets, test_sets = split_sets(spanish_set=es, english_set=en, val_percent=0.001, test_percent=0.001)
 
-    write_to_text_files(train=train_sets,
-                        val=val_sets,
-                        test=test_sets,
-                        save_path="../data/es-en/")
+    # save consumable files
+    write_to_text_files(train=train_sets, val=val_sets, test=test_sets, save_path="../data/es-en/")

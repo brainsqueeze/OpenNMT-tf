@@ -275,6 +275,8 @@ def main():
 
   session_config = tf.ConfigProto()
   session_config.gpu_options.allow_growth = args.gpu_allow_growth
+  session_config.gpu_options.per_process_gpu_memory_fraction = 0.8
+  session_config.allow_soft_placement = True
 
   run_config = tf.estimator.RunConfig(
       model_dir=config["model_dir"],
