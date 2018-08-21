@@ -37,7 +37,7 @@ OpenNMT-tf is also compatible with some of the best TensorFlow features:
 
 ## Requirements
 
-* `tensorflow` (`1.4`)
+* `tensorflow` (`1.5`)
 * `pyyaml`
 
 ## Overview
