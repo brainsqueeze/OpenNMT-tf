@@ -1,10 +1,7 @@
 import numpy as np
-from nltk.tokenize import word_tokenize
 
 import re
 import os
-
-MAX_SEQ_LEN = 100
 
 
 def clean_data(root_path):
@@ -13,6 +10,7 @@ def clean_data(root_path):
     files = [".es".join(x.split(".es")[:-1]) for x in os.listdir(root_path) if x.endswith(".es")]
 
     pattern = re.compile(r"([!\"#\$%&\'\(\)\*\+,-\.\/:;\<\=\>\?\@\[\\\]\^_`\{\|\}~])")
+    empty_lines = re.compile(r"^\s*$")
 
     for f in files:
         spanish_file = open(root_path + f + ".es", 'r', encoding='utf8')
@@ -31,11 +29,7 @@ def clean_data(root_path):
             english_line = re.sub(pattern, r" \1 ", english_line.strip())
             english_line = re.sub(r"\s{2,}", " ", english_line)
 
-            # if 0 < len(word_tokenize(english_line)) <= MAX_SEQ_LEN:
-            #     english_text.append(english_line)
-            #     spanish_text.append(spanish_line)
-
-            if len(english_line) > 0 and len(spanish_line) > 0:
+            if not empty_lines.match(english_line) and not empty_lines.match(spanish_line):
                 english_text.append(english_line)
                 spanish_text.append(spanish_line)
         english_file.close()
