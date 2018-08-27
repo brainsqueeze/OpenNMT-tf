@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
-nohup tensorflow_model_server --port=9000 \
-    --enable_batching=true \
-    --batching_parameters_file=examples/serving/batching_parameters.txt \
-    --model_name=hi-en \
-    --model_base_path=$HOME/Documents/OpenNMT-tf/hi-en/export/latest & > nohup_tf_serving.out&
 
-nohup python examples/serving/server.py --model_name hi-en \
-    --timeout 30 \
-    --host localhost \
-    --port 9000 & > nohup_flask.out&
+LIBRARY_PATH="$(find $HOME -name "OpenNMT-tf")"
+MODEL_SERVER_PORT=9000
+MODEL_NAME=es-en
+
+tensorflow_model_server --port=${MODEL_SERVER_PORT} \
+    --enable_batching=true \
+    --batching_parameters_file=${LIBRARY_PATH}/examples/serving/batching_parameters.txt \
+    --model_name=${MODEL_NAME} \
+    --model_base_path=${LIBRARY_PATH}/${MODEL_NAME}/export/latest
+
+export MODEL_NAME=${MODEL_NAME}
+export TIME_OUT=30
+export SERVER_NAME=localhost
+export SERVER_PORT=${MODEL_SERVER_PORT}
+
+python ${LIBRARY_PATH}/examples/serving/server.py
