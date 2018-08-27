@@ -1,0 +1,9 @@
+model_dir: es-en
+
+data:
+  train_features_file: data/es-en/src-train.txt
+  train_labels_file: data/es-en/tgt-train.txt
+  eval_features_file: data/es-en/src-val.txt
+  eval_labels_file: data/es-en/tgt-val.txt
+  source_words_vocabulary: data/es-en/src-vocab.txt
+  target_words_vocabulary: data/es-en/tgt-vocab.txt
