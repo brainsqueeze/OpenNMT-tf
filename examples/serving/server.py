@@ -8,7 +8,6 @@ import os
 from grpc import insecure_channel
 
 from tensorflow_serving.apis import predict_pb2, prediction_service_pb2_grpc
-# from tensorflow_serving.apis import prediction_service_pb2, prediction_service_pb2_grpc
 import tensorflow as tf
 
 from flask import Flask, request, Response
@@ -16,7 +15,7 @@ from flask_cors import cross_origin
 from tornado.wsgi import WSGIContainer
 from tornado.ioloop import IOLoop
 from tornado.httpserver import HTTPServer
-# from tornado.options import parse_command_line
+from tornado.options import parse_command_line
 
 from nltk.tokenize import word_tokenize, sent_tokenize
 
@@ -64,7 +63,8 @@ def translate(stub, tokens, timeout=5.0):
     req.inputs["tokens"].CopyFrom(tf.make_tensor_proto([tokens], shape=(1, length)))
     req.inputs["length"].CopyFrom(tf.make_tensor_proto([length], shape=(1,)))
 
-    return stub.Predict.future(req, timeout)
+    # return stub.Predict.future(request=req, timeout=timeout)
+    return stub.Predict.future(request=req)
 
 
 @app.route('/translate', methods=['POST', 'GET'])
@@ -77,21 +77,22 @@ def translate_api():
         j = request.form
 
     if 'text' not in j:
-        return Response(response=json.dumps({"errorMessage": "No 'text' parameter"}, indent=2),
-                        status=500,
-                        mimetype="application/json")
+        return Response(
+            response=json.dumps({"errorMessage": "No 'text' parameter"}, indent=2),
+            status=500,
+            mimetype="application/json"
+        )
 
     text = j['text']
     batch_tokens = [word_tokenize(sent) for sent in sent_tokenize(text)]
-    print(batch_tokens)
 
     futures = []
     for tokens in batch_tokens:
-        future = translate(st, tokens, timeout=TIME_OUT)
+        future = translate(stub=st, tokens=tokens, timeout=TIME_OUT)
         future = parse_translation_result(future.result())
         futures.append(future)
 
-    translation = " ".join([" ".join(future) for future in futures])
+    translation = " ".join([" ".join(token.decode('utf8') for token in future) for future in futures])
     results = {
         "originalText": text,
         "translatedText": translation
@@ -111,7 +112,7 @@ def run_server(port=6006):
     http_server = HTTPServer(WSGIContainer(app))
     http_server.listen(port)
 
-    # parse_command_line()
+    parse_command_line()
 
     io_loop = IOLoop.instance()
     print("Listening to port", port)
