@@ -4,12 +4,10 @@ params:
   param_init: 0.1
   clip_gradients: 5.0
   decay_type: noam_decay
-  decay_rate: 256  # Model dimension.
+#  decay_rate: 256  # Model dimension.
+  decay_rate: 512
   decay_steps: 16000  # Warm up steps.
   start_decay_steps: 0
-#  decay_rate: 0.7
-#  decay_steps: 100000
-#  start_decay_steps: 500000
   beam_width: 5
   maximum_iterations: 250
 
