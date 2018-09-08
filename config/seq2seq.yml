@@ -12,7 +12,7 @@ params:
   maximum_iterations: 250
 
 train:
-  batch_size: 64
+  batch_size: 16
   bucket_width: 1
   save_checkpoints_steps: 5000
   save_summary_steps: 50
@@ -21,8 +21,8 @@ train:
   maximum_labels_length: 50
 
 eval:
-  batch_size: 32
+  batch_size: 16
   eval_delay: 1800 # Every 30 minutes.
 
 infer:
-  batch_size: 32
+  batch_size: 16

@@ -29,7 +29,7 @@ def clean_data(root_path):
             english_line = re.sub(pattern, r" \1 ", english_line.strip())
             english_line = re.sub(r"\s{2,}", " ", english_line)
 
-            if not empty_lines.match(english_line) or not empty_lines.match(spanish_line):
+            if not empty_lines.match(english_line) and not empty_lines.match(spanish_line):
                 english_text.append(english_line)
                 spanish_text.append(spanish_line)
         english_file.close()
