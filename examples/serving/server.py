@@ -17,6 +17,8 @@ from tornado.ioloop import IOLoop
 from tornado.httpserver import HTTPServer
 from tornado.options import parse_command_line
 
+import html
+import re
 from nltk.tokenize import word_tokenize, sent_tokenize
 
 app = Flask(__name__)
@@ -67,6 +69,14 @@ def translate(stub, tokens, timeout=5.0):
     return stub.Predict.future(request=req)
 
 
+def cleanup(text):
+    text = html.unescape(text)
+
+    text = re.sub("[\u201c\u201d]", '"', text)  # html double quotes
+    text = re.sub("\u2014", "-", text)  # html dashes
+    return text
+
+
 @app.route('/translate', methods=['POST', 'GET'])
 @cross_origin(origins=['*'], allow_headers=['Content-Type', 'Authorization'])
 def translate_api():
@@ -83,8 +93,8 @@ def translate_api():
             mimetype="application/json"
         )
 
-    text = j['text']
-    batch_tokens = [word_tokenize(sent) for sent in sent_tokenize(text)]
+    text = cleanup(j['text'])
+    batch_tokens = [word_tokenize(sent, language='spanish') for sent in sent_tokenize(text)]
 
     futures = []
     for tokens in batch_tokens:
