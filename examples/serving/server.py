@@ -57,14 +57,14 @@ def translate(stub, model_name, tokens, timeout=5.0):
     """
     length = len(tokens)
 
-    request = predict_pb2.PredictRequest()
-    request.model_spec.name = model_name
-    request.inputs["tokens"].CopyFrom(
+    req = predict_pb2.PredictRequest()
+    req.model_spec.name = model_name
+    req.inputs["tokens"].CopyFrom(
         tf.make_tensor_proto([tokens], shape=(1, length)))
-    request.inputs["length"].CopyFrom(
+    req.inputs["length"].CopyFrom(
         tf.make_tensor_proto([length], shape=(1,)))
 
-    return stub.Predict.future(request, timeout)
+    return stub.Predict.future(req, timeout)
 
 
 def main():
