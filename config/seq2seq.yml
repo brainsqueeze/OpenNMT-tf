@@ -1,0 +1,28 @@
+params:
+  optimizer: AdamOptimizer
+  learning_rate: 1.0
+  param_init: 0.1
+  clip_gradients: 5.0
+  decay_type: noam_decay
+#  decay_rate: 256  # Model dimension.
+  decay_rate: 512
+  decay_steps: 16000  # Warm up steps.
+  start_decay_steps: 0
+  beam_width: 5
+  maximum_iterations: 250
+
+train:
+  batch_size: 16
+  bucket_width: 1
+  save_checkpoints_steps: 5000
+  save_summary_steps: 50
+  train_steps: 1000000
+  maximum_features_length: 50
+  maximum_labels_length: 50
+
+eval:
+  batch_size: 16
+  eval_delay: 1800 # Every 30 minutes.
+
+infer:
+  batch_size: 16

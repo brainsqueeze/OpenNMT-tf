@@ -453,12 +453,7 @@ class Model(object):
     if mode == tf.estimator.ModeKeys.TRAIN:
       dataset = dataset.repeat()
 
-    iterator = dataset.make_initializable_iterator()
-
-    # Add the initializer to a standard collection for it to be initialized.
-    tf.add_to_collection(tf.GraphKeys.TABLE_INITIALIZERS, iterator.initializer)
-
-    return iterator.get_next()
+    return dataset
 
   def input_fn(self,
                mode,
