@@ -1,14 +1,15 @@
-[![Build Status](https://api.travis-ci.org/OpenNMT/OpenNMT-tf.svg?branch=master)](https://travis-ci.org/OpenNMT/OpenNMT-tf) [![Documentation](https://img.shields.io/badge/docs-master-blue.svg)](http://opennmt.net/OpenNMT-tf/) [![Gitter](https://badges.gitter.im/OpenNMT/OpenNMT-tf.svg)](https://gitter.im/OpenNMT/OpenNMT-tf?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+[![Build Status](https://api.travis-ci.org/OpenNMT/OpenNMT-tf.svg?branch=master)](https://travis-ci.org/OpenNMT/OpenNMT-tf) [![PyPI version](https://badge.fury.io/py/OpenNMT-tf.svg)](https://badge.fury.io/py/OpenNMT-tf) [![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://opennmt.net/OpenNMT-tf/) [![Gitter](https://badges.gitter.im/OpenNMT/OpenNMT-tf.svg)](https://gitter.im/OpenNMT/OpenNMT-tf?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 # OpenNMT-tf
 
-OpenNMT-tf is a general purpose sequence modeling tool in TensorFlow with production in mind. While neural machine translation is the main target task, it has been designed to more generally support:
+OpenNMT-tf is a general purpose sequence learning toolkit using TensorFlow 2.0. While neural machine translation is the main target task, it has been designed to more generally support:
 
 * sequence to sequence mapping
 * sequence tagging
 * sequence classification
+* language modeling
 
-*The project is still in beta and does not come with stability guarantees.*
+The project is production-oriented and comes with [backward compatibility guarantees](CHANGELOG.md).
 
 ## Hindi-to-English learning
 
@@ -18,87 +19,164 @@ See the data [README](hindi-en-data/README.md) for details.
 
 ## Key features
 
-OpenNMT-tf focuses on modularity to support advanced modeling and training capabilities:
+### Modular model architecture
 
-* **arbitrarily complex encoder architectures**<br/>e.g. mixing RNNs, CNNs, self-attention, etc. in parallel or in sequence.
-* **hybrid encoder-decoder models**<br/>e.g. self-attention encoder and RNN decoder or vice versa.
-* **multi-source training**<br/>e.g. source text and Moses translation as inputs for machine translation.
-* **multiple input format**<br/>text with support of mixed word/character embeddings or real vectors serialized in *TFRecord* files.
-* **on-the-fly tokenization**<br/>apply advanced tokenization dynamically during the training and detokenize the predictions during inference or evaluation.
-* **automatic evaluation**<br/>support for saving evaluation predictions and running external evaluators (e.g. BLEU).
+Models are described with code to allow training custom architectures and overriding default behavior. For example, the following instance defines a sequence to sequence model with 2 concatenated input features, a self-attentional encoder, and an attentional RNN decoder sharing its input and output embeddings:
 
-and all of the above can be used simultaneously to train novel and complex architectures. See the [predefined models](config/models) to discover how they are defined and the [API documentation](http://opennmt.net/OpenNMT-tf/package/opennmt.html) to customize them.
-
-OpenNMT-tf is also compatible with some of the best TensorFlow features:
-
-* asynchronous distributed training
-* monitoring with [TensorBoard](https://www.tensorflow.org/get_started/summaries_and_tensorboard)
-* inference with [TensorFlow Serving](https://www.tensorflow.org/serving/) and the TensorFlow C++ API.
-
-## Requirements
-
-* `tensorflow` (`1.5`)
-* `pyyaml`
-
-## Overview
-
-A minimal OpenNMT-tf run consists of 3 elements:
-
-* a Python file describing the **model**
-* a YAML file describing the **parameters**
-* a **run** type
-
-e.g.:
-
-```
-python -m bin.main <run_type> --model <model_file.py> --config <config_file.yml>
+```python
+opennmt.models.SequenceToSequence(
+    source_inputter=opennmt.inputters.ParallelInputter(
+        [opennmt.inputters.WordEmbedder(embedding_size=256),
+         opennmt.inputters.WordEmbedder(embedding_size=256)],
+        reducer=opennmt.layers.ConcatReducer(axis=-1)),
+    target_inputter=opennmt.inputters.WordEmbedder(embedding_size=512),
+    encoder=opennmt.encoders.SelfAttentionEncoder(num_layers=6),
+    decoder=opennmt.decoders.AttentionalRNNDecoder(
+        num_layers=4,
+        num_units=512,
+        attention_mechanism_class=tfa.seq2seq.LuongAttention),
+    share_embeddings=opennmt.models.EmbeddingsSharingLevel.TARGET)
 ```
 
-When loading an existing checkpoint, the `--model` option is optional.
+The [`opennmt`](https://opennmt.net/OpenNMT-tf/package/opennmt.html) package exposes other building blocks that can be used to design:
 
-* For more information about configuration files, see the [documentation](http://opennmt.net/OpenNMT-tf/configuration.html).
-* For more information about command line options, see the help flag `python -m bin.main -h`.
+* [multiple input features](https://opennmt.net/OpenNMT-tf/package/opennmt.inputters.ParallelInputter.html)
+* [mixed embedding representation](https://opennmt.net/OpenNMT-tf/package/opennmt.inputters.MixedInputter.html)
+* [multi-source context](https://opennmt.net/OpenNMT-tf/package/opennmt.inputters.ParallelInputter.html)
+* [cascaded](https://opennmt.net/OpenNMT-tf/package/opennmt.encoders.SequentialEncoder.html) or [multi-column](https://opennmt.net/OpenNMT-tf/package/opennmt.encoders.ParallelEncoder.html) encoder
+* [hybrid sequence to sequence models](https://opennmt.net/OpenNMT-tf/package/opennmt.models.SequenceToSequence.html)
 
-## Quickstart
+Standard models such as the Transformer are defined in a [model catalog](opennmt/models/catalog.py) and can be used without additional configuration.
 
-Here is a minimal workflow to get you started in using OpenNMT-tf. This example uses a toy English-German dataset for machine translation.
+*Find more information about model configuration in the [documentation](https://opennmt.net/OpenNMT-tf/model.html).*
 
-1\. Build the word vocabularies:
+### Full TensorFlow 2.0 integration
+
+OpenNMT-tf is fully integrated in the TensorFlow 2.0 ecosystem:
+
+* Reusable layers extending [`tf.keras.layers.Layer`](https://www.tensorflow.org/api_docs/python/tf/keras/layers/Layer)
+* Multi-GPU training with [`tf.distribute`](https://www.tensorflow.org/api_docs/python/tf/distribute)
+* Mixed precision support via a [graph optimization pass](https://www.tensorflow.org/versions/r2.0/api_docs/python/tf/train/experimental/enable_mixed_precision_graph_rewrite)
+* Visualization with [TensorBoard](https://www.tensorflow.org/tensorboard)
+* `tf.function` graph tracing that can be [exported to a SavedModel](https://opennmt.net/OpenNMT-tf/serving.html) and served with [TensorFlow Serving](examples/serving/tensorflow_serving) or [Python](examples/serving/python)
+
+### Dynamic data pipeline
+
+OpenNMT-tf does not require to compile the data before the training. Instead, it can directly read text files and preprocess the data when needed by the training. This allows [on-the-fly tokenization](https://opennmt.net/OpenNMT-tf/tokenization.html) and data augmentation by injecting random noise.
+
+### Model fine-tuning
+
+OpenNMT-tf supports model fine-tuning workflows:
+
+* Model weights can be transferred to new word vocabularies, e.g. to inject domain terminology before fine-tuning on in-domain data
+* [Contrastive learning](https://ai.google/research/pubs/pub48253/) to reduce word omission errors
+
+### Source-target alignment
+
+Sequence to sequence models can be trained with [guided alignment](https://arxiv.org/abs/1607.01628) and alignment information are returned as part of the translation API.
+
+---
+
+OpenNMT-tf also implements most of the techniques commonly used to train and evaluate sequence models, such as:
+
+* automatic evaluation during the training
+* multiple decoding strategy: greedy search, beam search, random sampling
+* N-best rescoring
+* gradient accumulation
+* scheduled sampling
+* checkpoint averaging
+* ... and more!
+
+*See the [documentation](https://opennmt.net/OpenNMT-tf/) to learn how to use these features.*
+
+## Usage
+
+OpenNMT-tf requires:
+
+* Python >= 3.5
+
+We recommend installing it with `pip`:
+
+```bash
+pip install --upgrade pip
+pip install OpenNMT-tf
+```
+
+*See the [documentation](https://opennmt.net/OpenNMT-tf/installation.html) for more information.*
+
+### Command line
+
+OpenNMT-tf comes with several command line utilities to prepare data, train, and evaluate models.
+
+For all tasks involving a model execution, OpenNMT-tf uses a unique entrypoint: `onmt-main`. A typical OpenNMT-tf run consists of 3 elements:
+
+* the **model** type
+* the **parameters** described in a YAML file
+* the **run** type such as `train`, `eval`, `infer`, `export`, `score`, `average_checkpoints`, or `update_vocab`
+
+that are passed to the main script:
 
 ```
-python -m bin.build_vocab --size 50000 --save_vocab data/toy-ende/src-vocab.txt data/toy-ende/src-train.txt
-python -m bin.build_vocab --size 50000 --save_vocab data/toy-ende/tgt-vocab.txt data/toy-ende/tgt-train.txt
+onmt-main --model_type <model> --config <config_file.yml> --auto_config <run_type> <run_options>
 ```
 
-2\. Train with preset parameters:
+*For more information and examples on how to use OpenNMT-tf, please visit [our documentation](https://opennmt.net/OpenNMT-tf).*
 
+### Library
+
+OpenNMT-tf also exposes [well-defined and stable APIs](https://opennmt.net/OpenNMT-tf/package/opennmt.html), from high-level training utilities to low-level model layers and dataset transformations.
+
+For example, the `Runner` class can be used to train and evaluate models with few lines of code:
+
+```python
+import opennmt
+
+config = {
+    "model_dir": "/data/wmt-ende/checkpoints/,
+    "data": {
+        "source_vocabulary": "/data/wmt-ende/joint-vocab.txt",
+        "target_vocabulary": "/data/wmt-ende/joint-vocab.txt",
+        "train_features_file": "/data/wmt-ende/train.en",
+        "train_labels_file": "/data/wmt-ende/train.de",
+        "eval_features_file": "/data/wmt-ende/valid.en",
+        "eval_labels_file": "/data/wmt-ende/valid.de",
+    }
+}
+
+model = opennmt.models.TransformerBase()
+runner = opennmt.Runner(model, config, auto_config=True)
+runner.train(num_devices=2, with_eval=True)
 ```
-python -m bin.main train --model config/models/nmt_small.py --config config/opennmt-defaults.yml config/data/toy-ende.yml
+
+Here is another example using OpenNMT-tf to run efficient beam search with a self-attentional decoder:
+
+```python
+decoder = opennmt.decoders.SelfAttentionDecoder(num_layers=6)
+decoder.initialize(vocab_size=32000)
+
+initial_state = decoder.initial_state(
+    memory=memory,
+    memory_sequence_length=memory_sequence_length)
+
+batch_size = tf.shape(memory)[0]
+start_ids = tf.fill([batch_size], opennmt.START_OF_SENTENCE_ID)
+
+decoding_result = decoder.dynamic_decode(
+    target_embedding,
+    start_ids=start_ids,
+    initial_state=initial_state,
+    decoding_strategy=opennmt.utils.BeamSearch(4))
 ```
 
-3\. Translate a test file with the latest checkpoint:
+More examples using OpenNMT-tf as a library can be found online:
 
-```
-python -m bin.main infer --config config/opennmt-defaults.yml config/data/toy-ende.yml --features_file data/toy-ende/src-test.txt
-```
+* The directory [examples/library](examples/library) contains additional examples that use OpenNMT-tf as a library
+* [nmt-wizard-docker](https://github.com/OpenNMT/nmt-wizard-docker) uses the high-level `opennmt.Runner` API to wrap OpenNMT-tf with a custom interface for training, translating, and serving
 
-**Note:** do not expect any good translation results with this toy example. Consider training on [larger parallel datasets](http://www.statmt.org/wmt16/translation-task.html) instead.
-
-For more advanced usages, see the [documentation](http://opennmt.net/OpenNMT-tf).
-
-## Compatibility with {Lua,Py}Torch implementations
-
-OpenNMT-tf has been designed from scratch and compatibility with the {Lua,Py}Torch implementations in terms of usage, design, and features is not a priority. Please submit a feature request for any missing feature or behavior that you found useful in the {Lua,Py}Torch implementations.
-
-## Acknowledgments
-
-The implementation is inspired by the following:
-
-* [TensorFlow's NMT tutorial](https://github.com/tensorflow/nmt)
-* [Tensor2Tensor](https://github.com/tensorflow/tensor2tensor)
-* [Google's seq2seq](https://github.com/google/seq2seq)
+*For a complete overview of the APIs, see the [package documentation](https://opennmt.net/OpenNMT-tf/package/opennmt.html).*
 
 ## Additional resources
 
-* [Documentation](http://opennmt.net/OpenNMT-tf)
-* [Forum](http://forum.opennmt.net)
+* [Documentation](https://opennmt.net/OpenNMT-tf)
+* [Forum](https://forum.opennmt.net)
+* [Gitter](https://gitter.im/OpenNMT/OpenNMT-tf)

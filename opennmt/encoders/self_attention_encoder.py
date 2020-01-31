@@ -1,10 +1,12 @@
 """Define the self-attention encoder."""
 
 import tensorflow as tf
-import opennmt.utils.transformer as transformer
+
+from opennmt.layers import transformer
 
 from opennmt.encoders.encoder import Encoder
-from opennmt.utils.position import PositionEmbedder
+from opennmt.layers.position import SinusoidalPositionEncoder
+from opennmt.layers import common
 
 
 class SelfAttentionEncoder(Encoder):
@@ -19,8 +21,11 @@ class SelfAttentionEncoder(Encoder):
                ffn_inner_dim=2048,
                dropout=0.1,
                attention_dropout=0.1,
-               relu_dropout=0.1,
-               position_encoder=PositionEmbedder()):
+               ffn_dropout=0.1,
+               ffn_activation=tf.nn.relu,
+               position_encoder_class=SinusoidalPositionEncoder,
+               maximum_relative_position=None,
+               **kwargs):
     """Initializes the parameters of the encoder.
 
     Args:
@@ -31,64 +36,50 @@ class SelfAttentionEncoder(Encoder):
         in the feed forward layer.
       dropout: The probability to drop units from the outputs.
       attention_dropout: The probability to drop units from the attention.
-      relu_dropout: The probability to drop units from the ReLU activation in
+      ffn_dropout: The probability to drop units from the activation output in
         the feed forward layer.
-      position_encoder: The :class:`opennmt.utils.position.PositionEncoder` to
-        apply on inputs or ``None``.
+      ffn_activation: The activation function to apply between the two linear
+        transformations of the feed forward layer.
+      position_encoder_class: The :class:`opennmt.layers.PositionEncoder`
+        class to use for position encoding (or a callable that returns an
+        instance).
+      maximum_relative_position: Maximum relative position representation
+        (from https://arxiv.org/abs/1803.02155).
+      **kwargs: Additional layer arguments.
     """
-    self.num_layers = num_layers
+    super(SelfAttentionEncoder, self).__init__(**kwargs)
     self.num_units = num_units
-    self.num_heads = num_heads
-    self.ffn_inner_dim = ffn_inner_dim
     self.dropout = dropout
-    self.attention_dropout = attention_dropout
-    self.relu_dropout = relu_dropout
-    self.position_encoder = position_encoder
+    self.position_encoder = None
+    if position_encoder_class is not None:
+      self.position_encoder = position_encoder_class()
+    self.layer_norm = common.LayerNorm()
+    self.layers = [
+        transformer.SelfAttentionEncoderLayer(
+            num_units,
+            num_heads,
+            ffn_inner_dim,
+            dropout=dropout,
+            attention_dropout=attention_dropout,
+            ffn_dropout=ffn_dropout,
+            ffn_activation=ffn_activation,
+            maximum_relative_position=maximum_relative_position)
+        for i in range(num_layers)]
 
-  def encode(self, inputs, sequence_length=None, mode=tf.estimator.ModeKeys.TRAIN):
+  def call(self, inputs, sequence_length=None, training=None):
+    inputs *= self.num_units**0.5
     if self.position_encoder is not None:
-      inputs = self.position_encoder(inputs, sequence_length=sequence_length)
+      inputs = self.position_encoder(inputs)
+    inputs = common.dropout(inputs, self.dropout, training=training)
+    mask = self.build_mask(inputs, sequence_length=sequence_length)
+    for layer in self.layers:
+      inputs = layer(inputs, mask=mask, training=training)
+    outputs = self.layer_norm(inputs)
+    return outputs, None, sequence_length
 
-    inputs = tf.layers.dropout(
-        inputs,
-        rate=self.dropout,
-        training=mode == tf.estimator.ModeKeys.TRAIN)
-    mask = transformer.build_sequence_mask(sequence_length, num_heads=self.num_heads)
-
-    state = ()
-
-    for l in range(self.num_layers):
-      with tf.variable_scope("layer_{}".format(l)):
-        with tf.variable_scope("multi_head"):
-          inputs_norm = transformer.norm(inputs)
-          context = transformer.multi_head_attention(
-              self.num_heads,
-              inputs_norm,
-              inputs_norm,
-              mode,
-              num_units=self.num_units,
-              mask=mask,
-              dropout=self.attention_dropout)
-          context = transformer.drop_and_add(
-              inputs,
-              context,
-              mode,
-              dropout=self.dropout)
-
-        with tf.variable_scope("ffn"):
-          transformed = transformer.feed_forward(
-              transformer.norm(context),
-              self.ffn_inner_dim,
-              mode,
-              dropout=self.relu_dropout)
-          transformed = transformer.drop_and_add(
-              context,
-              transformed,
-              mode,
-              dropout=self.dropout)
-
-        inputs = transformed
-        state += (tf.reduce_mean(inputs, axis=1),)
-
-    outputs = transformer.norm(inputs)
-    return (outputs, state, sequence_length)
+  def map_v1_weights(self, weights):
+    m = []
+    m += self.layer_norm.map_v1_weights(weights["LayerNorm"])
+    for i, layer in enumerate(self.layers):
+      m += layer.map_v1_weights(weights["layer_%d" % i])
+    return m

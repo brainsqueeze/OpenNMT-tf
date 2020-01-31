@@ -2,125 +2,92 @@
 
 import tensorflow as tf
 
+from opennmt import inputters
 from opennmt.models.model import Model
-from opennmt.utils.misc import count_lines, print_bytes
+from opennmt.utils import misc
 from opennmt.utils.losses import cross_entropy_loss
 
 
 class SequenceClassifier(Model):
   """A sequence classifier."""
 
-  def __init__(self,
-               inputter,
-               encoder,
-               labels_vocabulary_file_key,
-               encoding="average",
-               name="seqclassifier"):
+  def __init__(self, inputter, encoder):
     """Initializes a sequence classifier.
 
     Args:
-      inputter: A :class:`opennmt.inputters.inputter.Inputter` to process the
+      inputter: A :class:`opennmt.inputters.Inputter` to process the
         input data.
-      encoder: A :class:`opennmt.encoders.encoder.Encoder` to encode the input.
-      labels_vocabulary_file_key: The data configuration key of the labels
-        vocabulary file containing one label per line.
-      encoding: "average" or "last" (case insensitive), the encoding vector to
-        extract from the encoder outputs.
-      name: The name of this model.
+      encoder: A :class:`opennmt.encoders.Encoder` to encode the input.
 
     Raises:
       ValueError: if :obj:`encoding` is invalid.
     """
-    super(SequenceClassifier, self).__init__(name)
-
-    self.inputter = inputter
+    example_inputter = inputters.ExampleInputter(inputter, ClassInputter())
+    super(SequenceClassifier, self).__init__(example_inputter)
     self.encoder = encoder
-    self.labels_vocabulary_file_key = labels_vocabulary_file_key
-    self.encoding = encoding.lower()
 
-    if self.encoding not in ("average", "last"):
-      raise ValueError("Invalid encoding vector: {}".format(self.encoding))
+  def build(self, input_shape):
+    super(SequenceClassifier, self).build(input_shape)
+    self.output_layer = tf.keras.layers.Dense(self.labels_inputter.vocabulary_size)
 
-  def _initialize(self, metadata):
-    self.inputter.initialize(metadata)
-    self.labels_vocabulary_file = metadata[self.labels_vocabulary_file_key]
-    self.num_labels = count_lines(self.labels_vocabulary_file)
+  def call(self, features, labels=None, training=None, step=None):
+    inputs = self.features_inputter(features, training=training)
+    outputs, state, outputs_length = self.encoder(
+        inputs,
+        sequence_length=self.features_inputter.get_length(features),
+        training=training)
 
-  def _get_serving_input_receiver(self):
-    return self.inputter.get_serving_input_receiver()
+    if state is None:
+      if outputs_length is not None:
+        outputs = tf.RaggedTensor.from_tensor(outputs, lengths=outputs_length)
+      encoding = tf.reduce_mean(outputs, axis=1)
+    else:
+      last_state = state[-1] if isinstance(state, (list, tuple)) else state
+      encoding = last_state if not isinstance(state, (list, tuple)) else last_state[0]
+    logits = self.output_layer(encoding)
 
-  def _get_features_length(self, features):
-    return self.inputter.get_length(features)
-
-  def _get_features_builder(self, features_file):
-    dataset = self.inputter.make_dataset(features_file)
-    process_fn = self.inputter.process
-    padded_shapes_fn = lambda: self.inputter.padded_shapes
-    return dataset, process_fn, padded_shapes_fn
-
-  def _get_labels_builder(self, labels_file):
-    labels_vocabulary = tf.contrib.lookup.index_table_from_file(
-        self.labels_vocabulary_file,
-        vocab_size=self.num_labels)
-
-    dataset = tf.data.TextLineDataset(labels_file)
-    process_fn = lambda x: {
-        "classes": x,
-        "classes_id": labels_vocabulary.lookup(x)
-    }
-    padded_shapes_fn = lambda: {
-        "classes": [],
-        "classes_id": []
-    }
-    return dataset, process_fn, padded_shapes_fn
-
-  def _build(self, features, labels, params, mode, config):
-    with tf.variable_scope("encoder"):
-      inputs = self.inputter.transform_data(
-          features,
-          mode=mode,
-          log_dir=config.model_dir)
-
-      encoder_outputs, _, _ = self.encoder.encode(
-          inputs,
-          sequence_length=self._get_features_length(features),
-          mode=mode)
-
-    if self.encoding == "average":
-      encoding = tf.reduce_mean(encoder_outputs, axis=1)
-    elif self.encoding == "last":
-      encoding = tf.squeeze(encoder_outputs[:, -1:, :], axis=1)
-
-    with tf.variable_scope("generator"):
-      logits = tf.layers.dense(
-          encoding,
-          self.num_labels)
-
-    if mode != tf.estimator.ModeKeys.TRAIN:
-      labels_vocab_rev = tf.contrib.lookup.index_to_string_table_from_file(
-          self.labels_vocabulary_file,
-          vocab_size=self.num_labels)
+    if not training:
       classes_prob = tf.nn.softmax(logits)
       classes_id = tf.argmax(classes_prob, axis=1)
       predictions = {
-          "classes": labels_vocab_rev.lookup(classes_id)
+          "classes": self.labels_inputter.ids_to_tokens.lookup(classes_id),
+          "classes_id": classes_id
       }
     else:
       predictions = None
 
     return logits, predictions
 
-  def _compute_loss(self, features, labels, outputs, params, mode):
+  def compute_loss(self, outputs, labels, training=True):
     return cross_entropy_loss(
         outputs,
         labels["classes_id"],
-        label_smoothing=params.get("label_smoothing", 0.0),
-        mode=mode)
+        label_smoothing=self.params.get("label_smoothing", 0.0),
+        training=training)
 
-  def _compute_metrics(self, features, labels, predictions):
-    return {
-        "accuracy": tf.metrics.accuracy(labels["classes"], predictions["classes"])
-    }
+  def get_metrics(self):
+    return {"accuracy": tf.keras.metrics.Accuracy()}
+
+  def update_metrics(self, metrics, predictions, labels):
+    metrics["accuracy"].update_state(labels["classes_id"], predictions["classes_id"])
 
   def print_prediction(self, prediction, params=None, stream=None):
-    print_bytes(prediction["classes"], stream=stream)
+    misc.print_as_bytes(prediction["classes"], stream=stream)
+
+
+class ClassInputter(inputters.TextInputter):
+  """Reading class from a text file."""
+
+  def __init__(self):
+    super(ClassInputter, self).__init__(num_oov_buckets=0)
+
+  def make_features(self, element=None, features=None, training=None):
+    if features is None:
+      features = {}
+    if "classes" not in features:
+      features["classes"] = element
+    features["classes_id"] = self.tokens_to_ids.lookup(features["classes"])
+    return features
+
+  def input_signature(self):
+    return {"classes": tf.TensorSpec([None], tf.string)}

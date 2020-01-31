@@ -1,23 +1,58 @@
-from setuptools import setup
+from setuptools import setup, find_packages
+
+tests_require = [
+    "parameterized",
+    "nose2"
+]
 
 setup(
     name="OpenNMT-tf",
-    version="0.1",
+    version="2.6.0",
     license="MIT",
+    description="Neural machine translation and sequence learning using TensorFlow",
+    author="OpenNMT",
+    author_email="guillaume.klein@systrangroup.com",
+    url="https://opennmt.net",
+    classifiers=[
+        "Development Status :: 5 - Production/Stable",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research",
+        "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence"
+    ],
+    project_urls={
+        "Documentation": "https://opennmt.net/OpenNMT-tf/",
+        "Forum": "https://forum.opennmt.net/",
+        "Gitter": "https://gitter.im/OpenNMT/OpenNMT-tf",
+        "Source": "https://github.com/OpenNMT/OpenNMT-tf/"
+    },
+    keywords="tensorflow opennmt nmt neural machine translation",
     install_requires=[
-        "pyyaml",
-        "flask",
-        "nltk",
-        "numpy",
-        "tornado"
+        "ctranslate2>=1.4,<2;platform_system=='Linux'",
+        "pyonmttok>=1.18.1,<2;platform_system=='Linux'",
+        "pyyaml>=5.3,<5.4",
+        "rouge==0.3.1",
+        "sacrebleu>=1.4.3,<2",
+        "tensorflow-addons>=0.7.1,<0.8"
     ],
     extras_require={
-        "TensorFlow": ["tensorflow==1.4.0"],
-        "TensorFlow (with CUDA support)": ["tensorflow-gpu==1.4.0"]
+        "tests": tests_require,
     },
-    tests_require=[
-        "nose2"
-    ],
+    tests_require=tests_require,
     test_suite="nose2.collector.collector",
-    packages=["opennmt"]
+    packages=find_packages(exclude=["bin", "*.tests"]),
+    entry_points={
+        "console_scripts": [
+            "onmt-ark-to-records=opennmt.bin.ark_to_records:main",
+            "onmt-build-vocab=opennmt.bin.build_vocab:main",
+            "onmt-detokenize-text=opennmt.bin.detokenize_text:main",
+            "onmt-main=opennmt.bin.main:main",
+            "onmt-merge-config=opennmt.bin.merge_config:main",
+            "onmt-tokenize-text=opennmt.bin.tokenize_text:main",
+        ],
+    }
 )

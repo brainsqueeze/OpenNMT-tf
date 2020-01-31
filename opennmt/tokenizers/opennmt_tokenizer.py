@@ -1,60 +1,52 @@
 """Define the OpenNMT tokenizer."""
 
-import six
-
-import pyonmttok
+import os
+import copy
+import yaml
 
 import tensorflow as tf
 
-from opennmt.tokenizers.tokenizer import Tokenizer
+import pyonmttok
+
+from opennmt.tokenizers import tokenizer
 
 
-def create_tokenizer(config):
-  """Creates a new OpenNMT tokenizer.
-
-  Args:
-    config: A dictionary of tokenization options.
-
-  Returns:
-    A ``pyonmttok.Tokenizer``.
-  """
-  def _set(kwargs, key):
-    if key in config:
-      value = config[key]
-      if isinstance(value, six.string_types):
-        value = tf.compat.as_bytes(value)
-      kwargs[key] = value
-
-  kwargs = {}
-  _set(kwargs, "bpe_model_path")
-  _set(kwargs, "joiner")
-  _set(kwargs, "joiner_annotate")
-  _set(kwargs, "joiner_new")
-  _set(kwargs, "case_feature")
-  _set(kwargs, "segment_case")
-  _set(kwargs, "segment_numbers")
-  _set(kwargs, "segment_alphabet_change")
-  _set(kwargs, "segment_alphabet")
-
-  return pyonmttok.Tokenizer(config.get("mode", "conservative"), **kwargs)
+def _make_config_asset_file(config, asset_path):
+  asset_config = copy.deepcopy(config)
+  for key, value in asset_config.items():
+    # Only keep the basename for files (that should also be registered as assets).
+    if isinstance(value, str) and tf.io.gfile.exists(value):
+      asset_config[key] = os.path.basename(value)
+  with tf.io.gfile.GFile(asset_path, "w") as asset_file:
+    yaml.dump(asset_config, stream=asset_file, default_flow_style=False)
 
 
-class OpenNMTTokenizer(Tokenizer):
+@tokenizer.register_tokenizer
+class OpenNMTTokenizer(tokenizer.Tokenizer):
   """Uses the OpenNMT tokenizer."""
 
-  def __init__(self, configuration_file_or_key=None):
-    super(OpenNMTTokenizer, self).__init__(configuration_file_or_key=configuration_file_or_key)
-    self._tokenizer = None
+  def __init__(self, **kwargs):
+    self._config = copy.deepcopy(kwargs)
+    mode = "conservative"
+    if "mode" in kwargs:
+      mode = kwargs["mode"]
+      del kwargs["mode"]
+    self._tokenizer = pyonmttok.Tokenizer(mode, **kwargs)
+
+  def export_assets(self, asset_dir, asset_prefix=""):
+    asset_name = "%stokenizer_config.yml" % asset_prefix
+    asset_path = os.path.join(asset_dir, asset_name)
+    _make_config_asset_file(self._config, asset_path)
+    assets = {}
+    assets[asset_name] = asset_path
+    for key, value in self._config.items():
+      if key.endswith("path"):
+        assets[os.path.basename(value)] = value
+    return assets
 
   def _tokenize_string(self, text):
-    if self._tokenizer is None:
-      self._tokenizer = create_tokenizer(self._config)
-    text = tf.compat.as_bytes(text)
     tokens, _ = self._tokenizer.tokenize(text)
     return tokens
 
   def _detokenize_string(self, tokens):
-    if self._tokenizer is None:
-      self._tokenizer = create_tokenizer(self._config)
-    tokens = [tf.compat.as_bytes(token) for token in tokens]
     return self._tokenizer.detokenize(tokens)
